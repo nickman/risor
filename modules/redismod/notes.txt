@@ -1,0 +1,30 @@
+With Redis:   42,867,984
+With Brew:    163,210,384
+
+
+QueryFunc etc. for PGX/SQL
+Kafka
+Atomics / Counters / ConcurrentFileWriter
+ PQL ?
+File based configuration
+gobOps
+Ants Pool
+Ungzipper, Unzipper
+SSH / SFTP / Port Tunneling
+Google Translate
+Extended Utils (ttlmap, syncttlmap, typed snc maps
+Ansi Tables
+
+
+https://github.com/rubiojr/rsx
+
+
+
+=====
+LOCAL
+=====
+
+To start redis now and restart at login:
+  brew services start redis
+Or, if you don't want/need a background service you can just run:
+  /usr/local/opt/redis/bin/redis-server /usr/local/etc/redis.conf
