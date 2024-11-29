@@ -48,6 +48,7 @@ func getGlobals() risor.Option {
 		"isatty":      isatty.Module(),
 		"net":         net.Module(),
 		"pgx":         pgx.Module(),
+		"redis":       redis.Module(),
 		"sql":         sql.Module(),
 		"tablewriter": tablewriter.Module(),
 		"template":    template.Module(),

@@ -1,0 +1,71 @@
+func (c *RedisConn) Pipeline(ctx context.Context, args ...object.Object) object.Object {
+	pipeline := c.client.Pipeline()
+	return object.NewBuiltin("redis.conn.pipeline", func(ctx context.Context, args ...object.Object) object.Object {
+		if len(args) != 1 {
+			return object.TypeErrorf("type error: redis.conn.pipeline() takes exactly one argument (%d given)", len(args))
+		}
+		fn, ok := args[0].(*object.Function)
+		if !ok {
+			return object.TypeErrorf("type error: redis.conn.pipeline() expected a function argument (got %s)", args[0].Type())
+		}
+		result := fn.Call(ctx, object.NewList())
+		if err := pipeline.Exec(ctx); err != nil {
+			return object.NewError(err)
+		}
+		return result
+	})
+}
+
+func (c *RedisConn) Pipelined(ctx context.Context, args ...object.Object) object.Object {
+	if len(args) != 1 {
+		return object.TypeErrorf("type error: redis.conn.pipelined() takes exactly one argument (%d given)", len(args))
+	}
+	fn, ok := args[0].(*object.Function)
+	if !ok {
+		return object.TypeErrorf("type error: redis.conn.pipelined() expected a function argument (got %s)", args[0].Type())
+	}
+	result, err := c.client.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		fn.Call(ctx, object.NewList())
+		return nil
+	})
+	if err != nil {
+		return object.NewError(err)
+	}
+	return object.FromGoType(result)
+}
+
+func (c *RedisConn) TxPipelined(ctx context.Context, args ...object.Object) object.Object {
+	if len(args) != 1 {
+		return object.TypeErrorf("type error: redis.conn.txpipelined() takes exactly one argument (%d given)", len(args))
+	}
+	fn, ok := args[0].(*object.Function)
+	if !ok {
+		return object.TypeErrorf("type error: redis.conn.txpipelined() expected a function argument (got %s)", args[0].Type())
+	}
+	result, err := c.client.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		fn.Call(ctx, object.NewList())
+		return nil
+	})
+	if err != nil {
+		return object.NewError(err)
+	}
+	return object.FromGoType(result)
+}
+
+func (c *RedisConn) TxPipeline(ctx context.Context, args ...object.Object) object.Object {
+	txPipeline := c.client.TxPipeline()
+	return object.NewBuiltin("redis.conn.txpipeline", func(ctx context.Context, args ...object.Object) object.Object {
+		if len(args) != 1 {
+			return object.TypeErrorf("type error: redis.conn.txpipeline() takes exactly one argument (%d given)", len(args))
+		}
+		fn, ok := args[0].(*object.Function)
+		if !ok {
+			return object.TypeErrorf("type error: redis.conn.txpipeline() expected a function argument (got %s)", args[0].Type())
+		}
+		result := fn.Call(ctx, object.NewList())
+		if err := txPipeline.Exec(ctx); err != nil {
+			return object.NewError(err)
+		}
+		return result
+	})
+}
