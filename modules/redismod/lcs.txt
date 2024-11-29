@@ -1,0 +1,130 @@
+// ==========================================
+// LCSMatch Object
+// ==========================================
+
+type LCSMatchObject struct {
+	Match *redis.LCSMatch
+}
+
+func (o *LCSMatchObject) Type() object.Type {
+	return "LCSMatch"
+}
+
+func (o *LCSMatchObject) Inspect() string {
+	return o.Match.MatchString
+}
+
+func (o *LCSMatchObject) String() string {
+	return o.Match.MatchString
+}
+
+func (o *LCSMatchObject) GetAttr(name string) (object.Object, bool) {
+	switch name {
+	case "match_string":
+		return object.NewString(o.Match.MatchString), true
+	case "matches":
+		matches := make([]object.Object, len(o.Match.Matches))
+		for i, match := range o.Match.Matches {
+			matches[i] = &LCSMatchedPositionObject{Position: match}
+		}
+		return object.NewArray(matches), true
+	case "len":
+		return object.NewInt(o.Match.Len), true
+	default:
+		return nil, false
+	}
+}
+
+func (o *LCSMatchObject) SetAttr(name string, value object.Object) error {
+	return object.ErrReadOnly
+}
+
+func (o *LCSMatchObject) Interface() interface{} {
+	return o.Match
+}
+
+func (o *LCSMatchObject) Equals(other object.Object) bool {
+	if other.Type() != "LCSMatch" {
+		return false
+	}
+	return o.Match.MatchString == other.(*LCSMatchObject).Match.MatchString
+}
+
+func (o *LCSMatchObject) HashKey() object.HashKey {
+	return object.HashKey{Type: o.Type(), Value: o.Match.MatchString}
+}
+
+type LCSMatchedPositionObject struct {
+	Position redis.LCSMatchedPosition
+}
+
+func (o *LCSMatchedPositionObject) Equals(other object.Object) object.Object {
+	if other.Type() == DURATION && d.value == other.(*Duration).value {
+		return True
+	}
+	return False
+}
+
+func (o *LCSMatchedPositionObject) IsTruthy() bool {
+	return true
+}
+
+func (o *LCSMatchedPositionObject) RunOperation(opType op.BinaryOpType, right object.Object) object.Object {
+	return object.TypeErrorf("type error: unsupported operation for LCSMatchObject: %v", opType)
+}
+
+func (o *LCSMatchedPositionObject) Cost() int {
+	return 8
+}
+
+func (o *LCSMatchedPositionObject) Type() object.Type {
+	return "LCSMatchedPosition"
+}
+
+func (o *LCSMatchedPositionObject) Inspect() string {
+	return strings.Join([]string{
+		"Key1: {Start: " + strconv.FormatInt(o.Position.Key1.Start, 10) + ", End: " + strconv.FormatInt(o.Position.Key1.End, 10) + "}",
+		"Key2: {Start: " + strconv.FormatInt(o.Position.Key2.Start, 10) + ", End: " + strconv.FormatInt(o.Position.Key2.End, 10) + "}",
+		"MatchLen: " + strconv.FormatInt(o.Position.MatchLen, 10),
+	}, ", ")
+}
+
+func (o *LCSMatchedPositionObject) String() string {
+	return o.Inspect()
+}
+
+func (o *LCSMatchedPositionObject) GetAttr(name string) (object.Object, bool) {
+	switch name {
+	case "key1_start":
+		return object.NewInt(o.Position.Key1.Start), true
+	case "key1_end":
+		return object.NewInt(o.Position.Key1.End), true
+	case "key2_start":
+		return object.NewInt(o.Position.Key2.Start), true
+	case "key2_end":
+		return object.NewInt(o.Position.Key2.End), true
+	case "match_len":
+		return object.NewInt(o.Position.MatchLen), true
+	default:
+		return nil, false
+	}
+}
+
+func (o *LCSMatchedPositionObject) SetAttr(name string, value object.Object) error {
+	return object.ErrReadOnly
+}
+
+func (o *LCSMatchedPositionObject) Interface() interface{} {
+	return o.Position
+}
+
+func (o *LCSMatchedPositionObject) Equals(other object.Object) bool {
+	if other.Type() != "LCSMatchedPosition" {
+		return false
+	}
+	return o.Position == other.(*LCSMatchedPositionObject).Position
+}
+
+func (o *LCSMatchedPositionObject) HashKey() object.HashKey {
+	return object.HashKey{Type: o.Type(), Value: o.Inspect()}
+}

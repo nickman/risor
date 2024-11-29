@@ -42,6 +42,7 @@ const (
 	COMPLEX       Type = "complex"
 	COMPLEX_SLICE Type = "complex_slice"
 	DIR_ENTRY     Type = "dir_entry"
+	DURATION      Type = "duration"
 	DYNAMIC_ATTR  Type = "dynamic_attr"
 	ERROR         Type = "error"
 	FILE          Type = "file"
