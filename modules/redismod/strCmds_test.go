@@ -423,7 +423,7 @@ func Exec(script string, args map[string]string) (object.Object, error) {
 		//runtime.GC()
 		fmt.Printf("Execution: test=%s, elapsed=%s\n", testName, time.Since(startTime))
 	}()
-	return risor.Eval(ctx, source, risor.WithGlobals(map[string]any{
+	return risor.Eval(ctx, source, risor.WithConcurrency(), risor.WithGlobals(map[string]any{
 		"redis":    Module(),
 		"duration": duration.Module(),
 	}))

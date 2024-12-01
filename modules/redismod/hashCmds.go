@@ -3,10 +3,11 @@ package redismod
 import (
 	"context"
 	"github.com/risor-io/risor/object"
+	"log"
 )
 
 /*
-	TODO:HScan, HScanNoValues, HRandField, HRandFieldWithValues, HExpire, HExpireWithArgs, HPExpire, HPExpireWithArgs, HExpireAt, HExpireAtWithArgs, HPExpireAt, HPExpireAtWithArgs, HPersist, HExpireTime, HPExpireTime, HTTL, HPTTL
+	TODO: HPExpire, HPExpireWithArgs, HExpireAt, HExpireAtWithArgs, HPExpireAt, HPExpireAtWithArgs, HPersist, HExpireTime, HPExpireTime, HTTL, HPTTL
 */
 
 func (c *RedisConn) HashCmdsGetAttr(name string) (object.Object, bool) {
@@ -27,6 +28,22 @@ func (c *RedisConn) HashCmdsGetAttr(name string) (object.Object, bool) {
 		return object.NewBuiltin("redis.conn.hmget", c.HMGet), true
 	case "hmset":
 		return object.NewBuiltin("redis.conn.hmset", c.HMSet), true
+	case "hexists":
+		return object.NewBuiltin("redis.conn.hexists", c.HExists), true
+	case "hgetall":
+		return object.NewBuiltin("redis.conn.hgetall", c.HGetAll), true
+	case "hincrby":
+		return object.NewBuiltin("redis.conn.hincrby", c.HIncrBy), true
+	case "hincrbyfloat":
+		return object.NewBuiltin("redis.conn.hincrbyfloat", c.HIncrByFloat), true
+	case "hsetnx":
+		return object.NewBuiltin("redis.conn.hsetnx", c.HSetNX), true
+	case "hscan":
+		return object.NewBuiltin("redis.conn.hscan", c.HScan), true
+	case "hscanfunc":
+		return object.NewBuiltin("redis.conn.hscanfunc", c.HScanFunc), true
+	case "hscanfuncbatch":
+		return object.NewBuiltin("redis.conn.hscanfuncbatch", c.HScanFuncBatch), true
 
 	}
 	return nil, false
@@ -147,6 +164,7 @@ func (c *RedisConn) HIncrBy(ctx context.Context, args ...object.Object) object.O
 	if !ok {
 		return object.TypeErrorf("type error: redis.conn.hincrby() expected an int argument for increment (got %s)", args[2].Type())
 	}
+	// HIncrBy(ctx context.Context, key, field string, incr int64) *IntCmd
 	intCmd := c.cmdable.HIncrBy(c.ctx, key.Value(), field.Value(), increment.Value())
 	if err := intCmd.Err(); err != nil {
 		return object.NewError(err)
@@ -185,6 +203,7 @@ func (c *RedisConn) HKeys(ctx context.Context, args ...object.Object) object.Obj
 	if !ok {
 		return object.TypeErrorf("type error: redis.conn.hkeys() expected a string argument for key (got %s)", args[0].Type())
 	}
+	// HKeys(ctx context.Context, key string) *StringSliceCmd
 	stringSliceCmd := c.cmdable.HKeys(c.ctx, key.Value())
 	if err := stringSliceCmd.Err(); err != nil {
 		return object.NewError(err)
@@ -227,6 +246,7 @@ func (c *RedisConn) HMGet(ctx context.Context, args ...object.Object) object.Obj
 		}
 		fields[i] = field.Value()
 	}
+	// HMGet(ctx context.Context, key string, fields ...string) *SliceCmd
 	stringSliceCmd := c.cmdable.HMGet(c.ctx, key.Value(), fields...)
 	if err := stringSliceCmd.Err(); err != nil {
 		return object.NewError(err)
@@ -258,6 +278,7 @@ func (c *RedisConn) HSet(ctx context.Context, args ...object.Object) object.Obje
 		}
 		pairs[i] = str.Value()
 	}
+	// HSet(ctx context.Context, key string, values ...interface{}) *IntCmd
 	intCmd := c.cmdable.HSet(c.ctx, key.Value(), pairs...)
 	if err := intCmd.Err(); err != nil {
 		return object.NewError(err)
@@ -305,9 +326,344 @@ func (c *RedisConn) HSetNX(ctx context.Context, args ...object.Object) object.Ob
 	if !ok {
 		return object.TypeErrorf("type error: redis.conn.hsetnx() expected a string argument for value (got %s)", args[2].Type())
 	}
+	// HSetNX(ctx context.Context, key, field string, value interface{}) *BoolCmd
 	boolCmd := c.cmdable.HSetNX(c.ctx, key.Value(), field.Value(), value.Value())
 	if err := boolCmd.Err(); err != nil {
 		return object.NewError(err)
 	}
 	return object.NewBool(boolCmd.Val())
 }
+
+func (c *RedisConn) HScan(ctx context.Context, args ...object.Object) object.Object {
+	if len(args) < 2 {
+		return object.TypeErrorf("type error: redis.conn.hscan() takes at least two arguments (%d given)", len(args))
+	}
+	key, ok := args[0].(*object.String)
+	if !ok {
+		return object.TypeErrorf("type error: redis.conn.hscan() expected a string argument for key (got %s)", args[0].Type())
+	}
+	cursor, ok := args[1].(*object.Int)
+	if !ok {
+		return object.TypeErrorf("type error: redis.conn.hscan() expected an int argument for cursor (got %s)", args[1].Type())
+	}
+	var match string
+	var count int64
+	if len(args) > 2 {
+		matchArg, ok := args[2].(*object.String)
+		if !ok {
+			return object.TypeErrorf("type error: redis.conn.hscan() expected a string argument for match (got %s)", args[2].Type())
+		}
+		match = matchArg.Value()
+	}
+	if len(args) > 3 {
+		countArg, ok := args[3].(*object.Int)
+		if !ok {
+			return object.TypeErrorf("type error: redis.conn.hscan() expected an int argument for count (got %s)", args[3].Type())
+		}
+		count = countArg.Value()
+	}
+	if match == "" {
+		match = "*"
+	}
+	// HScan(ctx context.Context, key string, cursor uint64, match string, count int64) *ScanCmd
+	// HSCAN key cursor [MATCH pattern] [COUNT count] [NOVALUES]
+	scanCmd := c.cmdable.HScan(c.ctx, key.Value(), uint64(cursor.Value()), match, count)
+	if err := scanCmd.Err(); err != nil {
+		return object.NewError(err)
+	}
+	// (keys []string, cursor uint64)
+	scanKeys, outCursor := scanCmd.Val()
+	size := len(scanKeys)
+	resultsMap := make(map[string]object.Object, size)
+	for idx := 0; idx < size; idx++ {
+		k := scanKeys[idx]
+		idx++
+		v := object.NewString(scanKeys[idx])
+		resultsMap[k] = v
+	}
+	scanPage := object.NewMap(resultsMap)
+	return object.NewList([]object.Object{object.NewInt(int64(outCursor)), scanPage})
+}
+
+func (c *RedisConn) HScanFunc(ctx context.Context, args ...object.Object) object.Object {
+	if len(args) < 3 {
+		return object.TypeErrorf("type error: redis.conn.hscanfunc() takes at least three arguments (%d given)", len(args))
+	}
+	callbackFx, ok := args[0].(object.Callable)
+	if !ok {
+		return object.TypeErrorf("type error: pgx.conn.hscanfunc() expected a callable argument for fx (got %s)", args[0].Type())
+	}
+	key, ok := args[1].(*object.String)
+	if !ok {
+		return object.TypeErrorf("type error: redis.conn.hscanfunc() expected a string argument for key (got %s)", args[1].Type())
+	}
+	cursor, ok := args[2].(*object.Int)
+	if !ok {
+		return object.TypeErrorf("type error: redis.conn.hscanfunc() expected an int argument for cursor (got %s)", args[2].Type())
+	}
+	var match string
+	var count int64
+	if len(args) > 3 {
+		matchArg, ok := args[3].(*object.String)
+		if !ok {
+			return object.TypeErrorf("type error: redis.conn.hscanfunc() expected a string argument for match (got %s)", args[3].Type())
+		}
+		match = matchArg.Value()
+	}
+	if len(args) > 4 {
+		countArg, ok := args[4].(*object.Int)
+		if !ok {
+			return object.TypeErrorf("type error: redis.conn.hscanfunc() expected an int argument for count (got %s)", args[4].Type())
+		}
+		count = countArg.Value()
+	}
+	if match == "" {
+		match = "*"
+	}
+	// HScan(ctx context.Context, key string, cursor uint64, match string, count int64) *ScanCmd
+	// HSCAN key cursor [MATCH pattern] [COUNT count] [NOVALUES]
+	keyValPairCount := 0
+	pageCount := 0
+	rcursor := uint64(cursor.Value())
+outer:
+	for {
+		scanCmd := c.cmdable.HScan(c.ctx, key.Value(), rcursor, match, count)
+		if err := scanCmd.Err(); err != nil {
+			return object.NewError(err)
+		}
+		pageCount++
+		scanKeys, outCursor := scanCmd.Val()
+		rcursor = outCursor
+		size := len(scanKeys)
+
+		for idx := 0; idx < size; idx++ {
+			k := object.NewString(scanKeys[idx])
+			idx++
+			v := object.NewString(scanKeys[idx])
+			keyValPairCount++
+			callbackContinue, callbackErr := DoCallback(ctx, callbackFx, k, v)
+			if callbackErr != nil {
+				return object.NewError(callbackErr)
+			} else {
+				if !callbackContinue {
+					break outer
+				} else {
+					continue
+				}
+			}
+		}
+		if outCursor == 0 {
+			break
+		}
+	}
+	log.Printf("HScanFunc: pageCount=%d, keyValPairCount=%d\n", pageCount, keyValPairCount)
+	return object.NewList([]object.Object{object.NewInt(int64(pageCount)), object.NewInt(int64(keyValPairCount))})
+}
+
+func (c *RedisConn) HScanFuncBatch(ctx context.Context, args ...object.Object) object.Object {
+	if len(args) < 3 {
+		return object.TypeErrorf("type error: redis.conn.hscanfuncbatch() takes at least three arguments (%d given)", len(args))
+	}
+	callbackFx, ok := args[0].(object.Callable)
+	if !ok {
+		return object.TypeErrorf("type error: pgx.conn.hscanfuncbatch() expected a callable argument for fx (got %s)", args[0].Type())
+	}
+	key, ok := args[1].(*object.String)
+	if !ok {
+		return object.TypeErrorf("type error: redis.conn.hscanfuncbatch() expected a string argument for key (got %s)", args[1].Type())
+	}
+	cursor, ok := args[2].(*object.Int)
+	if !ok {
+		return object.TypeErrorf("type error: redis.conn.hscanfuncbatch() expected an int argument for cursor (got %s)", args[2].Type())
+	}
+	var match string
+	var count int64
+	if len(args) > 3 {
+		matchArg, ok := args[3].(*object.String)
+		if !ok {
+			return object.TypeErrorf("type error: redis.conn.hscanfuncbatch() expected a string argument for match (got %s)", args[3].Type())
+		}
+		match = matchArg.Value()
+	}
+	if len(args) > 4 {
+		countArg, ok := args[4].(*object.Int)
+		if !ok {
+			return object.TypeErrorf("type error: redis.conn.hscanfuncbatch() expected an int argument for count (got %s)", args[4].Type())
+		}
+		count = countArg.Value()
+	}
+	if match == "" {
+		match = "*"
+	}
+	// HScan(ctx context.Context, key string, cursor uint64, match string, count int64) *ScanCmd
+	// HSCAN key cursor [MATCH pattern] [COUNT count] [NOVALUES]
+	keyValPairCount := 0
+	pageCount := 0
+	rcursor := uint64(cursor.Value())
+	for {
+		scanCmd := c.cmdable.HScan(c.ctx, key.Value(), rcursor, match, count)
+		if err := scanCmd.Err(); err != nil {
+			return object.NewError(err)
+		}
+		pageCount++
+		scanKeys, outCursor := scanCmd.Val()
+		rcursor = outCursor
+		size := len(scanKeys)
+		resultsMap := make(map[string]object.Object, size)
+		for idx := 0; idx < size; idx++ {
+			k := scanKeys[idx]
+			idx++
+			v := object.NewString(scanKeys[idx])
+			resultsMap[k] = v
+			keyValPairCount++
+		}
+		scanPage := object.NewMap(resultsMap)
+		callbackContinue, callbackErr := DoCallback(ctx, callbackFx, scanPage)
+		if callbackErr != nil {
+			return object.NewError(callbackErr)
+		} else {
+			if !callbackContinue {
+				break
+			} else {
+				continue
+			}
+		}
+	}
+	log.Printf("HScanFuncBatch: pageCount=%d, keyValPairCount=%d\n", pageCount, keyValPairCount)
+	return object.NewList([]object.Object{object.NewInt(int64(pageCount)), object.NewInt(int64(keyValPairCount))})
+}
+
+//func (c *RedisConn) HScanNoValues(ctx context.Context, args ...object.Object) object.Object {
+//	if len(args) < 2 {
+//		return object.TypeErrorf("type error: redis.conn.hscannovalues() takes at least two arguments (%d given)", len(args))
+//	}
+//	key, ok := args[0].(*object.String)
+//	if !ok {
+//		return object.TypeErrorf("type error: redis.conn.hscannovalues() expected a string argument for key (got %s)", args[0].Type())
+//	}
+//	cursor, ok := args[1].(*object.Int)
+//	if !ok {
+//		return object.TypeErrorf("type error: redis.conn.hscannovalues() expected an int argument for cursor (got %s)", args[1].Type())
+//	}
+//	var match string
+//	var count int64
+//	if len(args) > 2 {
+//		matchArg, ok := args[2].(*object.String)
+//		if !ok {
+//			return object.TypeErrorf("type error: redis.conn.hscannovalues() expected a string argument for match (got %s)", args[2].Type())
+//		}
+//		match = matchArg.Value()
+//	}
+//	if len(args) > 3 {
+//		countArg, ok := args[3].(*object.Int)
+//		if !ok {
+//			return object.TypeErrorf("type error: redis.conn.hscannovalues() expected an int argument for count (got %s)", args[3].Type())
+//		}
+//		count = countArg.Value()
+//	}
+//	scanCmd := c.cmdable.HScan(c.ctx, key.Value(), cursor.Value(), match, count)
+//	if err := scanCmd.Err(); err != nil {
+//		return object.NewError(err)
+//	}
+//	results := make([]object.Object, len(scanCmd.Val())/2)
+//	for i := 0; i < len(scanCmd.Val()); i += 2 {
+//		results[i/2] = object.NewString(scanCmd.Val()[i])
+//	}
+//	return object.NewList(results)
+//}
+//
+//func (c *RedisConn) HRandField(ctx context.Context, args ...object.Object) object.Object {
+//	if len(args) < 1 || len(args) > 2 {
+//		return object.TypeErrorf("type error: redis.conn.hrandfield() takes one or two arguments (%d given)", len(args))
+//	}
+//	key, ok := args[0].(*object.String)
+//	if !ok {
+//		return object.TypeErrorf("type error: redis.conn.hrandfield() expected a string argument for key (got %s)", args[0].Type())
+//	}
+//	var count int64
+//	if len(args) == 2 {
+//		countArg, ok := args[1].(*object.Int)
+//		if !ok {
+//			return object.TypeErrorf("type error: redis.conn.hrandfield() expected an int argument for count (got %s)", args[1].Type())
+//		}
+//		count = countArg.Value()
+//	}
+//	stringSliceCmd := c.cmdable.HRandField(c.ctx, key.Value(), count)
+//	if err := stringSliceCmd.Err(); err != nil {
+//		return object.NewError(err)
+//	}
+//	results := make([]object.Object, len(stringSliceCmd.Val()))
+//	for i, val := range stringSliceCmd.Val() {
+//		results[i] = object.NewString(val)
+//	}
+//	return object.NewList(results)
+//}
+//
+//func (c *RedisConn) HRandFieldWithValues(ctx context.Context, args ...object.Object) object.Object {
+//	if len(args) != 2 {
+//		return object.TypeErrorf("type error: redis.conn.hrandfieldwithvalues() takes exactly two arguments (%d given)", len(args))
+//	}
+//	key, ok := args[0].(*object.String)
+//	if !ok {
+//		return object.TypeErrorf("type error: redis.conn.hrandfieldwithvalues() expected a string argument for key (got %s)", args[0].Type())
+//	}
+//	count, ok := args[1].(*object.Int)
+//	if !ok {
+//		return object.TypeErrorf("type error: redis.conn.hrandfieldwithvalues() expected an int argument for count (got %s)", args[1].Type())
+//	}
+//	stringSliceCmd := c.cmdable.HRandFieldWithValues(c.ctx, key.Value(), count.Value())
+//	if err := stringSliceCmd.Err(); err != nil {
+//		return object.NewError(err)
+//	}
+//	results := make([]object.Object, len(stringSliceCmd.Val()))
+//	for i, val := range stringSliceCmd.Val() {
+//		results[i] = object.NewString(val)
+//	}
+//	return object.NewList(results)
+//}
+//
+//func (c *RedisConn) HExpire(ctx context.Context, args ...object.Object) object.Object {
+//	if len(args) != 2 {
+//		return object.TypeErrorf("type error: redis.conn.hexpire() takes exactly two arguments (%d given)", len(args))
+//	}
+//	key, ok := args[0].(*object.String)
+//	if !ok {
+//		return object.TypeErrorf("type error: redis.conn.hexpire() expected a string argument for key (got %s)", args[0].Type())
+//	}
+//	seconds, ok := args[1].(*object.Int)
+//	if !ok {
+//		return object.TypeErrorf("type error: redis.conn.hexpire() expected an int argument for seconds (got %s)", args[1].Type())
+//	}
+//	boolCmd := c.cmdable.HExpire(c.ctx, key.Value(), seconds.Value())
+//	if err := boolCmd.Err(); err != nil {
+//		return object.NewError(err)
+//	}
+//	return object.NewBool(boolCmd.Val())
+//}
+//
+//func (c *RedisConn) HExpireWithArgs(ctx context.Context, args ...object.Object) object.Object {
+//	if len(args) < 2 {
+//		return object.TypeErrorf("type error: redis.conn.hexpirewithargs() takes at least two arguments (%d given)", len(args))
+//	}
+//	key, ok := args[0].(*object.String)
+//	if !ok {
+//		return object.TypeErrorf("type error: redis.conn.hexpirewithargs() expected a string argument for key (got %s)", args[0].Type())
+//	}
+//	seconds, ok := args[1].(*object.Int)
+//	if !ok {
+//		return object.TypeErrorf("type error: redis.conn.hexpirewithargs() expected an int argument for seconds (got %s)", args[1].Type())
+//	}
+//	var options []redis.SetArgs
+//	for _, arg := range args[2:] {
+//		option, ok := arg.(*object.String)
+//		if !ok {
+//			return object.TypeErrorf("type error: redis.conn.hexpirewithargs() expected string arguments for options (got %s)", arg.Type())
+//		}
+//		options = append(options, redis.SetArgs(option.Value()))
+//	}
+//	boolCmd := c.cmdable.HExpireWithArgs(c.ctx, key.Value(), seconds.Value(), options...)
+//	if err := boolCmd.Err(); err != nil {
+//		return object.NewError(err)
+//	}
+//	return object.NewBool(boolCmd.Val())
+//}

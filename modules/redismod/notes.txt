@@ -14,6 +14,17 @@ SSH / SFTP / Port Tunneling
 Google Translate
 Extended Utils (ttlmap, syncttlmap, typed snc maps
 Ansi Tables
+Prometheus Scraper
+Postgres LISTEN/NOTIFY
+Native Passes through context
+
+=======
+Kafka
+=======
+    Admin Client
+    Producer
+    Subscriber
+    File/Env based configuration
 
 
 https://github.com/rubiojr/rsx
